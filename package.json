@@ -1,0 +1,46 @@
+{
+    "name": "membase",
+    "version": "1.0.0",
+    "description": "A JavaScript library for memory management, blockchain integration, and knowledge storage",
+    "main": "src/index.js",
+    "type": "module",
+    "scripts": {
+        "test": "jest",
+        "build": "rollup -c",
+        "dev": "node --watch src/index.js",
+        "lint": "eslint src/**/*.js",
+        "format": "prettier --write src/**/*.js"
+    },
+    "keywords": [
+        "memory",
+        "blockchain",
+        "knowledge",
+        "storage",
+        "ai",
+        "membase"
+    ],
+    "author": "Unibase Team",
+    "license": "MIT",
+    "dependencies": {
+        "axios": "^1.6.0",
+        "crypto-js": "^4.2.0",
+        "ethers": "^6.8.0",
+        "uuid": "^9.0.0"
+    },
+    "devDependencies": {
+        "@babel/core": "^7.23.0",
+        "@babel/preset-env": "^7.23.0",
+        "eslint": "^8.50.0",
+        "jest": "^29.7.0",
+        "prettier": "^3.0.0",
+        "rollup": "^4.0.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/unibaseio/membase-js.git"
+    },
+    "bugs": {
+        "url": "https://github.com/unibaseio/membase-js/issues"
+    },
+    "homepage": "https://github.com/unibaseio/membase-js#readme"
+}
