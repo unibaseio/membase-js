@@ -1,15 +1,19 @@
 {
     "name": "membase",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "A JavaScript library for memory management, blockchain integration, and knowledge storage",
     "main": "src/index.js",
     "type": "module",
+    "engines": {
+        "node": ">=18.0.0"
+    },
     "scripts": {
         "test": "jest",
         "build": "rollup -c",
         "dev": "node --watch src/index.js",
         "lint": "eslint src/**/*.js",
-        "format": "prettier --write src/**/*.js"
+        "format": "prettier --write src/**/*.js",
+        "test:fetch": "node examples/fetch-test.js"
     },
     "keywords": [
         "memory",
@@ -17,12 +21,13 @@
         "knowledge",
         "storage",
         "ai",
-        "membase"
+        "membase",
+        "fetch",
+        "https"
     ],
     "author": "Unibase Team",
     "license": "MIT",
     "dependencies": {
-        "axios": "^1.6.0",
         "crypto-js": "^4.2.0",
         "ethers": "^6.8.0",
         "uuid": "^9.0.0"

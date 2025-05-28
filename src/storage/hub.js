@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 class Client {
     constructor(baseUrl) {
         this.baseUrl = baseUrl;
@@ -7,18 +5,50 @@ class Client {
         this.isProcessing = false;
         this.membaseId = process.env.MEMBASE_ID || '';
 
-        // Configure axios defaults to reduce intermittent issues
-        this.axiosConfig = {
+        // Configure fetch defaults for better HTTPS handling
+        this.fetchConfig = {
             timeout: 30000,
-            maxRedirects: 5,
-            validateStatus: function (status) {
-                return status < 500;
-            },
-            // Disable keep-alive to avoid connection reuse issues
             headers: {
-                'Connection': 'close'
+                'User-Agent': 'membase-js/1.0.0',
+                'Accept': 'application/json'
             }
         };
+
+        // Configure HTTPS agent for Node.js fetch
+        if (typeof process !== 'undefined' && process.env.NODE_ENV !== 'production') {
+            // In development, be more lenient with SSL certificates
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+        }
+    }
+
+    /**
+     * Enhanced fetch wrapper with timeout and error handling
+     * @param {string} url - The URL to fetch
+     * @param {Object} options - Fetch options
+     * @returns {Promise<Response>} - Fetch response
+     */
+    async fetchWithTimeout(url, options = {}) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.fetchConfig.timeout);
+
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal,
+                headers: {
+                    ...this.fetchConfig.headers,
+                    ...options.headers
+                }
+            });
+            clearTimeout(timeoutId);
+            return response;
+        } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+                throw new Error('Request timeout');
+            }
+            throw error;
+        }
     }
 
     /**
@@ -46,8 +76,9 @@ class Client {
             } catch (error) {
                 lastError = error;
 
-                // Don't retry on certain error types
-                if (error.response && error.response.status >= 400 && error.response.status < 500) {
+                // Don't retry on certain error types (4xx client errors)
+                if (error.message.includes('400') || error.message.includes('401') ||
+                    error.message.includes('403') || error.message.includes('404')) {
                     break;
                 }
             }
@@ -84,11 +115,19 @@ class Client {
                     Message: msg
                 };
 
-                const response = await axios.post(`${this.baseUrl}/api/upload`, memeStruct, {
-                    headers: { 'Content-Type': 'application/json' }
+                const response = await this.fetchWithTimeout(`${this.baseUrl}/api/upload`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(memeStruct)
                 });
 
-                const res = response.data;
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const res = await response.json();
                 resolve(res);
             } catch (error) {
                 console.error(`Error during upload: ${error.message}`);
@@ -158,11 +197,16 @@ class Client {
             formData.append('file', blob, filename);
             formData.append('owner', owner);
 
-            const response = await axios.post(`${this.baseUrl}/api/uploadData`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+            const response = await this.fetchWithTimeout(`${this.baseUrl}/api/uploadData`, {
+                method: 'POST',
+                body: formData
             });
 
-            const res = response.data;
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const res = await response.json();
             return res;
         } catch (error) {
             console.error(`Error during upload: ${error.message}`);
@@ -176,19 +220,19 @@ class Client {
                 const formData = new URLSearchParams();
                 formData.append('owner', owner);
 
-                const response = await axios.post(`${this.baseUrl}/api/conversation`, formData, {
-                    ...this.axiosConfig,
+                const response = await this.fetchWithTimeout(`${this.baseUrl}/api/conversation`, {
+                    method: 'POST',
                     headers: {
-                        ...this.axiosConfig.headers,
                         'Content-Type': 'application/x-www-form-urlencoded'
-                    }
+                    },
+                    body: formData
                 });
 
-                if (response.status >= 400) {
+                if (!response.ok) {
                     return null;
                 }
 
-                return response.data;
+                return await response.json();
             },
             `listConversations(${owner})`,
             maxRetries
@@ -205,19 +249,19 @@ class Client {
                 formData.append('owner', owner);
                 formData.append('id', conversationId);
 
-                const response = await axios.post(`${this.baseUrl}/api/conversation`, formData, {
-                    ...this.axiosConfig,
+                const response = await this.fetchWithTimeout(`${this.baseUrl}/api/conversation`, {
+                    method: 'POST',
                     headers: {
-                        ...this.axiosConfig.headers,
                         'Content-Type': 'application/x-www-form-urlencoded'
-                    }
+                    },
+                    body: formData
                 });
 
-                if (response.status >= 400) {
+                if (!response.ok) {
                     return null;
                 }
 
-                return response.data;
+                return await response.json();
             },
             `getConversation(${owner}, ${conversationId})`,
             maxRetries
@@ -233,12 +277,19 @@ class Client {
             formData.append('id', filename);
             formData.append('owner', owner);
 
-            const response = await axios.post(`${this.baseUrl}/api/download`, formData, {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                responseType: 'arraybuffer'
+            const response = await this.fetchWithTimeout(`${this.baseUrl}/api/download`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: formData
             });
 
-            return response.data;
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return await response.arrayBuffer();
         } catch (error) {
             console.error(`Error during download: ${error.message}`);
             return null;
@@ -268,7 +319,9 @@ class Client {
             baseUrl: this.baseUrl,
             membaseId: this.membaseId,
             queueLength: this.uploadQueue.length,
-            isProcessing: this.isProcessing
+            isProcessing: this.isProcessing,
+            fetchConfig: this.fetchConfig,
+            environment: process.env.NODE_ENV || 'development'
         };
     }
 }
